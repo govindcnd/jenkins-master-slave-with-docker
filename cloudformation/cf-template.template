@@ -1,20 +1,19 @@
-#cloud-formation tempalte for AWS infra build up for jeknins based ci-cd master-slave set up 
 AWSTemplateFormatVersion: '2010-09-09'
 Description: mcrm-ci-Server Autoscaled Infra set up .
 Parameters:
     VpcId:
         Type: 'AWS::EC2::VPC::Id'
         Description: VpcId of your existing Virtual Private Cloud (VPC)
-        Default: vpc-67050303
         ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
     LSubnet1:
         Type: List<AWS::EC2::Subnet::Id>
-        Description: Subnet Id for LogSubnet1 using staging db subnets here
+        Description: Subnet Id for Master here 
+    ClientSubnet1:
+        Type: 'AWS::EC2::Subnet::Id'
+        Description: Subnet Id for Jenkins Slave 
     KeyName:
-        Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
         Type: 'AWS::EC2::KeyPair::KeyName'
-        Default: drp-test
-        ConstraintDescription: must be the name of an existing EC2 KeyPair.
+        Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
     SSHLocation:
         Description: Lockdown SSH access to the bastion host (default can be accessed from anywhere)
         Type: String
@@ -316,8 +315,13 @@ Mappings:
             PV64: ami-27c12348
             HVM64: ami-d3c022bc
             HVMG2: ami-8e7092e1
+        ap-southeast-1:
+            PV64: ami-05868579
+            HVM64: ami-05868579
+            HVMG2: ami-05868579
+
 Resources:
-    ciServerGroupv2:
+    ciMasterGroupv2:
         Type: 'AWS::AutoScaling::AutoScalingGroup'
         Properties:
             VPCZoneIdentifier: !Ref LSubnet1
@@ -329,7 +333,7 @@ Resources:
             HealthCheckGracePeriod: '300'
             DesiredCapacity:
                 Ref: InstanceCount
-            Tags:
+            Tags: 
                 - 
                     PropagateAtLaunch: 'true'
                     Value:
@@ -338,8 +342,9 @@ Resources:
                             - 
                                 - 
                                     Ref: 'AWS::StackName'
-                                - -dev-stack
+                                - jenkins-masterstack
                     Key: Name
+            
             LoadBalancerNames:
                 - 
                     Ref: ElasticLoadBalancer
@@ -365,24 +370,19 @@ Resources:
                 Ref: KeyName
             InstanceType:
                 Ref: InstanceType
-            IamInstanceProfile: ciserver-role
             UserData:
                 'Fn::Base64':
                  !Sub |
                     #!/bin/bash -vx
                     exec > >(tee /var/log/userdata.log) 2>&1
                     IP=$(/usr/bin/ec2metadata | grep public-ipv4 | head -n 1 | awk '{print $2}' | sed 's/\./-/g')
-                    INSTANCE_TAG=mcrm-ci-client
+                    INSTANCE_TAG=mcrm-ci-master-client
                     NEWRELIC_HOSTNAME=$INSTANCE_TAG-$IP
-                    hostname $NEWRELIC_HOSTNAME
-                    echo "127.0.0.1      $NEWRELIC_HOSTNAME" >>  /etc/hosts
-                    echo "hostname=$NEWRELIC_HOSTNAME" >> /etc/newrelic/nrsysmond.cfg
-                    /etc/init.d/newrelic-sysmond restart
-                    apt-get -y install unzip
-                    cd /tmp && wget https://aws-codedeploy-eu-west-1.s3.amazonaws.com/latest/install
-                    apt-get -y install ruby2.0
-                    chmod 755 /tmp/install
-                    cd /tmp/ && ./install auto
+                    tee /etc/profile.d/devops.sh << EOF
+                        #!/bin/bash
+                        export ENV_NAME=Jenkins_Master
+                        export SLAVE_NAME=${SlaveIPAddress}
+
     ElasticLoadBalancer:
         Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
         Properties:
@@ -399,7 +399,7 @@ Resources:
                     LoadBalancerPort: '80'
                     InstancePort: '8080'
                     Protocol: HTTP
-             HealthCheck:
+            HealthCheck:
                 Target: 'TCP:8080'
                 HealthyThreshold: '2'
                 UnhealthyThreshold: '9'
@@ -442,7 +442,7 @@ Resources:
             ScalingAdjustment: -1
             Cooldown: 300
             AutoScalingGroupName:
-                Ref: ciServerGroupv2
+                Ref: ciMasterGroupv2
             AdjustmentType: ChangeInCapacity
     CPUAlarmLow:
         Type: 'AWS::CloudWatch::Alarm'
@@ -452,7 +452,7 @@ Resources:
                 - 
                     Name: AutoScalingGroupName
                     Value:
-                        Ref: ciServerGroupv2
+                        Ref: ciMasterGroupv2
             AlarmActions:
                 - 
                     Ref: mcrmcistackscaledownpolicy
@@ -470,7 +470,7 @@ Resources:
             ScalingAdjustment: 1
             Cooldown: 300
             AutoScalingGroupName:
-                Ref: ciServerGroupv2
+                Ref: ciMasterGroupv2
             AdjustmentType: ChangeInCapacity
     CPUAlarmUP:
         Type: 'AWS::CloudWatch::Alarm'
@@ -480,7 +480,7 @@ Resources:
                 - 
                     Name: AutoScalingGroupName
                     Value:
-                        Ref: ciServerGroupv2
+                        Ref: ciMasterGroupv2
             AlarmActions:
                 - 
                     Ref: mcrmcistackscaleuppolicy
@@ -492,6 +492,58 @@ Resources:
             Threshold: '90'
             Unit: Percent
             MetricName: CPUUtilization
+    
+    SlaveSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Web server
+            GroupName: web     
+            VpcId: 
+                Ref: VpcId
+            SecurityGroupIngress:
+            -
+             IpProtocol: tcp
+             FromPort: 8080
+             ToPort: 8080
+             CidrIp: 0.0.0.0/0
+
+    ciSlaveGroupv2:
+        Type: AWS::EC2::Instance
+        Properties:
+            InstanceType:
+                Ref: InstanceType
+            ImageId: 
+                'Fn::FindInMap':
+                    - AWSRegionArch2AMI
+                    - 
+                        Ref: 'AWS::Region'
+                    - 
+                        'Fn::FindInMap':
+                            - AWSInstanceType2Arch
+                            - 
+                                Ref: InstanceType
+                            - Arch
+            KeyName: 
+                Ref: KeyName
+            SecurityGroupIds: 
+                - !Ref SlaveSecurityGroup
+            SubnetId: !Ref ClientSubnet1
+
+            Tags:
+                -
+                 Key: Name
+                 Value: jenkinsSlave
+    SlaveIPAddress:
+        Type: AWS::EC2::EIP
+    
+    IPAssoc:
+        Type: AWS::EC2::EIPAssociation
+        Properties:
+            InstanceId:
+                 Ref: ciSlaveGroupv2
+            EIP:
+                Ref: SlaveIPAddress
+
 Outputs:
     URL:
         Description: URL of the cisite
@@ -504,4 +556,4 @@ Outputs:
                         'Fn::GetAtt':
                             - ElasticLoadBalancer
                             - DNSName
-                            - ElasticIp
+
