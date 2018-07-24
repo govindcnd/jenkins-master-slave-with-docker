@@ -5,9 +5,6 @@ Parameters:
         Type: 'AWS::EC2::VPC::Id'
         Description: VpcId of your existing Virtual Private Cloud (VPC)
         ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
-    LSubnet1:
-        Type: List<AWS::EC2::Subnet::Id>
-        Description: Subnet Id for Master here 
     ClientSubnet1:
         Type: 'AWS::EC2::Subnet::Id'
         Description: Subnet Id for Jenkins Slave 
@@ -322,37 +319,11 @@ Mappings:
 
 Resources:
     ciMasterGroupv2:
-        Type: 'AWS::AutoScaling::AutoScalingGroup'
+        Type: AWS::EC2::Instance
         Properties:
-            VPCZoneIdentifier: !Ref LSubnet1
-            LaunchConfigurationName:
-                Ref: LaunchConfig
-            MinSize: '1'
-            MaxSize: '1'
-            HealthCheckType: EC2
-            HealthCheckGracePeriod: '300'
-            DesiredCapacity:
-                Ref: InstanceCount
-            Tags: 
-                - 
-                    PropagateAtLaunch: 'true'
-                    Value:
-                        'Fn::Join':
-                            - '-'
-                            - 
-                                - 
-                                    Ref: 'AWS::StackName'
-                                - jenkins-masterstack
-                    Key: Name
-            
-            LoadBalancerNames:
-                - 
-                    Ref: ElasticLoadBalancer
-    LaunchConfig:
-        Type: 'AWS::AutoScaling::LaunchConfiguration'
-        Properties:
-            AssociatePublicIpAddress: 'true'
-            ImageId:
+            InstanceType:
+                Ref: InstanceType
+            ImageId: 
                 'Fn::FindInMap':
                     - AWSRegionArch2AMI
                     - 
@@ -363,13 +334,11 @@ Resources:
                             - 
                                 Ref: InstanceType
                             - Arch
-            SecurityGroups:
-                - 
-                    Ref: InstanceSecurityGroup
-            KeyName:
+            KeyName: 
                 Ref: KeyName
-            InstanceType:
-                Ref: InstanceType
+            SecurityGroupIds: 
+                - !Ref JenkinsSecurityGroup
+            SubnetId: !Ref ClientSubnet1
             UserData:
                 'Fn::Base64':
                  !Sub |
@@ -380,136 +349,43 @@ Resources:
                     JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
                     hostname $JENKINS_HOSTNAME
                     sudo yum update
-                    sudo yum install ruby
-                    sudo yum install wget
+                    sudo yum install -y ruby
+                    sudo yum install -y git 
+                    sudo yum install -y wget
                     myregion=$(/usr/bin/ec2-metadata | grep placement | head -n 1 | awk '{print $2}' | rev | cut -c 2- | rev)
                     wget https://aws-codedeploy-$myregion.s3.amazonaws.com/latest/install
                     chmod +x ./install
                     sudo ./install auto
                     yum install -y python-pip
                     pip install ansible
+                    mkdir /var/jenkins_home
+                    cd /home/ec2-user/
+                    git clone https://github.com/govindcnd/jenkins-master-slave-with-docker.git
                     tee /etc/profile.d/devops.sh << EOF
                     #!/bin/bash
                     export ENV_NAME=Jenkins_Master
                     export SLAVE_NAME=${SlaveIPAddress}
+                    EOF
+                    /usr/bin/ansible-playbook /home/ec2-user/jenkins-master-slave-with-docker//playbooks/ansible/roles/master/site.yml -i /home/ec2-user/jenkins-master-slave-with-docker//playbooks/ansible/roles/master/hosts --connection=local
 
-    ElasticLoadBalancer:
-        Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
-        Properties:
-            CrossZone: 'true'
-            SecurityGroups:
-                - 
-                    Ref: LoadBalancerSecurityGroup
-            Subnets: !Ref LSubnet1
-            ConnectionDrainingPolicy:
-                Enabled: true
-                Timeout: 120
-            Listeners:
-                - 
-                    LoadBalancerPort: '80'
-                    InstancePort: '8080'
-                    Protocol: HTTP
-            HealthCheck:
-                Target: 'TCP:8080'
-                HealthyThreshold: '2'
-                UnhealthyThreshold: '9'
-                Interval: '30'
-                Timeout: '25'
-    LoadBalancerSecurityGroup:
-        Type: 'AWS::EC2::SecurityGroup'
-        Properties:
-            GroupDescription: Enable HTTP access on port 80
-            VpcId:
-                Ref: VpcId
-            SecurityGroupIngress:
-                - 
-                    IpProtocol: tcp
-                    FromPort: '8080'
-                    ToPort: '8080'
-                    CidrIp: 0.0.0.0/0
-    InstanceSecurityGroup:
-        Type: 'AWS::EC2::SecurityGroup'
-        Properties:
-            GroupDescription: Enable HTTP access and SSH access
-            VpcId:
-                Ref: VpcId
-            SecurityGroupIngress:
-                - 
-                    IpProtocol: tcp
-                    FromPort: '8080'
-                    ToPort: '8080'
-                    SourceSecurityGroupId:
-                        Ref: LoadBalancerSecurityGroup
-                - 
-                    IpProtocol: tcp
-                    FromPort: '0'
-                    ToPort: '65535'
-                    SourceSecurityGroupId:
-                        Ref: SlaveSecurityGroup
-                - 
-                    IpProtocol: tcp
-                    FromPort: '22'
-                    ToPort: '22'
-                    CidrIp:
-                        Ref: SSHLocation
-    mcrmcistackscaledownpolicy:
-        Type: 'AWS::AutoScaling::ScalingPolicy'
-        Properties:
-            ScalingAdjustment: -1
-            Cooldown: 300
-            AutoScalingGroupName:
-                Ref: ciMasterGroupv2
-            AdjustmentType: ChangeInCapacity
-    CPUAlarmLow:
-        Type: 'AWS::CloudWatch::Alarm'
-        Properties:
-            EvaluationPeriods: '10'
-            Dimensions:
-                - 
-                    Name: AutoScalingGroupName
-                    Value:
-                        Ref: ciMasterGroupv2
-            AlarmActions:
-                - 
-                    Ref: mcrmcistackscaledownpolicy
-            AlarmDescription: Alarm cpu load is  low
-            Namespace: AWS/EC2
-            Period: '60'
-            ComparisonOperator: LessThanThreshold
-            Statistic: Average
-            Threshold: '35'
-            Unit: Percent
-            MetricName: CPUUtilization
-    mcrmcistackscaleuppolicy:
-        Type: 'AWS::AutoScaling::ScalingPolicy'
-        Properties:
-            ScalingAdjustment: 1
-            Cooldown: 300
-            AutoScalingGroupName:
-                Ref: ciMasterGroupv2
-            AdjustmentType: ChangeInCapacity
-    CPUAlarmUP:
-        Type: 'AWS::CloudWatch::Alarm'
-        Properties:
-            EvaluationPeriods: '10'
-            Dimensions:
-                - 
-                    Name: AutoScalingGroupName
-                    Value:
-                        Ref: ciMasterGroupv2
-            AlarmActions:
-                - 
-                    Ref: mcrmcistackscaleuppolicy
-            AlarmDescription: 'Alarm cpu load is above 90 '
-            Namespace: AWS/EC2
-            Period: '60'
-            ComparisonOperator: GreaterThanThreshold
-            Statistic: Average
-            Threshold: '90'
-            Unit: Percent
-            MetricName: CPUUtilization
+
+            Tags:
+                -
+                 Key: Name
+                 Value: jenkinsMaster
+    MasterIPAddress:
+        Type: AWS::EC2::EIP
     
-    SlaveSecurityGroup:
+    IPAssoc:
+        Type: AWS::EC2::EIPAssociation
+        Properties:
+            InstanceId:
+                 Ref: ciMasterGroupv2
+            EIP:
+                Ref: MasterIPAddress
+      
+    
+    JenkinsSecurityGroup:
         Type: AWS::EC2::SecurityGroup
         Properties:
             GroupDescription: Web server
@@ -519,9 +395,15 @@ Resources:
             SecurityGroupIngress:
             -
              IpProtocol: tcp
-             FromPort: 8080
-             ToPort: 8080
+             FromPort: 80
+             ToPort: 80
              CidrIp: 0.0.0.0/0
+            -
+             IpProtocol: tcp
+             FromPort: 22
+             ToPort: 22
+             CidrIp: 
+                 Ref: SSHLocation
 
     ciSlaveGroupv2:
         Type: AWS::EC2::Instance
@@ -542,7 +424,7 @@ Resources:
             KeyName: 
                 Ref: KeyName
             SecurityGroupIds: 
-                - !Ref SlaveSecurityGroup
+                - !Ref JenkinsSecurityGroup
             SubnetId: !Ref ClientSubnet1
             UserData:
                 'Fn::Base64':
@@ -554,17 +436,20 @@ Resources:
                     JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
                     hostname $JENKINS_HOSTNAME
                     sudo yum update
-                    sudo yum install ruby
-                    sudo yum install wget
+                    sudo yum install -y ruby
+                    sudo yum install -y git 
+                    sudo yum install -y wget
                     myregion=$(/usr/bin/ec2-metadata | grep placement | head -n 1 | awk '{print $2}' | rev | cut -c 2- | rev)
                     wget https://aws-codedeploy-$myregion.s3.amazonaws.com/latest/install
                     chmod +x ./install
                     sudo ./install auto
                     yum install -y python-pip
                     pip install ansible
+                    cd /home/ec2-user/ && git clone https://github.com/govindcnd/jenkins-master-slave-with-docker.git
                     tee /etc/profile.d/devops.sh << EOF
                     #!/bin/bash
-                    export ENV_NAME=Jenkins_Master
+                    export ENV_NAME=Jenkins_Slave
+                    export MASTER_NAME=${MasterIPAddress}
 
             Tags:
                 -
@@ -590,6 +475,4 @@ Outputs:
                 - 
                     - 'http://'
                     - 
-                        'Fn::GetAtt':
-                            - ElasticLoadBalancer
-                            - DNSName
+                        'Fn::GetAtt': [ ciMasterGroupv2, PublicIp ]
