@@ -1,11 +1,13 @@
 version: "2"
 services:
   master:
-    image: eeacms/jenkins-master
+    image: govindcnd/jenkinsmastersalve
     ports:
     - "80:8080"
     environment:
-    - JAVA_OPTS=-Xmx2048m
+    - JAVA_OPTS=-Xmx1024m
     volumes:
     - jenkins-master:/var/jenkins_home
+volumes:
+  jenkins-master:
 

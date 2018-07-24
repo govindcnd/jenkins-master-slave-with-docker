@@ -14,7 +14,7 @@
 
 - name: Populate docker-compose-master file
   template : src=docker-compose-master.j2 dest=/home/ec2-user/docker-compose.yml
-  when : ENV_NAME == "Jenkins_Master"
+#  when : ENV_NAME == "Jenkins_Master"
 
 - name : run docker compose for master
   shell : "docker-compose up -d" 
