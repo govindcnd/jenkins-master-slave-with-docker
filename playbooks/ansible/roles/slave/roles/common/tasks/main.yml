@@ -1,0 +1,8 @@
+---
+# This playbook contains common plays that will be run on all nodes.
+
+- name : Install mlocate
+  yum : name=mlocate state=present
+
+- name : Install htop
+  yum : name=htop state=present

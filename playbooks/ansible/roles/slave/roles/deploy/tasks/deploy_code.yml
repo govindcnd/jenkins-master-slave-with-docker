@@ -1,0 +1,32 @@
+---
+
+- name : Install docker in machine 
+  shell : "yum install -y docker"
+
+- name : docker compose part
+  shell : "sudo curl -L https://github.com/docker/compose/releases/download/1.21.0/docker-compose-`uname -s`-`uname -m` | sudo tee /usr/bin/docker-compose > /dev/null"
+
+- name : service file set up for compose
+  shell : "sudo chmod +x /usr/bin/docker-compose"
+
+- name : ensure docker is running
+  shell : "sudo service docker restart"
+
+#- name: Populate docker-compose-master file
+#  template : src=docker-compose-master.j2 dest=/home/ec2-user/docker-compose.yml
+#  when : ENV_NAME == "Jenkins_Master"
+
+#- name: populate config file for jenkins admin user
+#  template : src=config.xml.j2 dest=/home/ec2-user/config.xml
+
+#- name: populate config file for jenkins slave node
+#  template : src=config-slave.xml.j2 dest=/home/ec2-user/config-slave.xml
+
+- name: populate config file for slave script
+  template : src=setupslave.sh.j2 dest=/home/ec2-user/setupslave.sh
+
+- name : run docker compose for master
+  shell : "bash -x /home/ec2-user/setupslave.sh"
+
+- name : run docker jenkins slave
+  shell : "docker run -d jenkins/jnlp-slave -url http://${SLAVE_NAME}:80  $secret_key slave-node"
