@@ -29,4 +29,4 @@
   shell : "bash -x /home/ec2-user/setupslave.sh"
 
 - name : run docker jenkins slave
-  shell : "docker run -d jenkins/jnlp-slave -url http://${SLAVE_NAME}:80  $secret_key slave-node"
+  shell : "docker run -d jenkins/jnlp-slave -url http://${Reach_NAME}:80  $secret_key slave-node"
