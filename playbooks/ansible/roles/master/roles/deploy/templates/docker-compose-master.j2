@@ -8,6 +8,9 @@ services:
     - JAVA_OPTS=-Xmx1024m
     volumes:
     - jenkins-master:/var/jenkins_home
+COPY ./config.xml.j2 /var/jenkins_home/users/admin/config.xml
+COPY ./config-slave.xml.j2 /var/jenkins_home/nodes/slave-node/config.xml
+
 volumes:
   jenkins-master:
 
