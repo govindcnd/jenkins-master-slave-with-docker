@@ -22,5 +22,8 @@
 - name: populate config file for jenkins slave node
   template : src=config-slave.xml.j2 dest=/home/ec2-user/config-slave.xml
 
+- name: populate config file for setup script
+  template : src=setup.sh.j2 dest=/home/ec2-user/setup.sh
+
 - name : run docker compose for master
   shell : "docker-compose up -d" 

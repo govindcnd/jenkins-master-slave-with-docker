@@ -6,9 +6,9 @@ services:
     - "80:8080"
     environment:
     - JAVA_OPTS=-Xmx1024m
+    - MY_COMMAND=bash -x /app/setup.sh
     volumes:
     - jenkins-master:/var/jenkins_home
     - /home/ec2-user:/app
 volumes:
   jenkins-master:
-
