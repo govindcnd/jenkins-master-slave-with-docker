@@ -375,13 +375,23 @@ Resources:
                  !Sub |
                     #!/bin/bash -vx
                     exec > >(tee /var/log/userdata.log) 2>&1
-                    IP=$(/usr/bin/ec2metadata | grep public-ipv4 | head -n 1 | awk '{print $2}' | sed 's/\./-/g')
+                    IP=$(/usr/bin/ec2-metadata | grep public-ipv4 | head -n 1 | awk '{print $2}' | sed 's/\./-/g')
                     INSTANCE_TAG=mcrm-ci-master-client
-                    NEWRELIC_HOSTNAME=$INSTANCE_TAG-$IP
+                    JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
+                    hostname $JENKINS_HOSTNAME
+                    sudo yum update
+                    sudo yum install ruby
+                    sudo yum install wget
+                    myregion=$(/usr/bin/ec2-metadata | grep placement | head -n 1 | awk '{print $2}' | rev | cut -c 2- | rev)
+                    wget https://aws-codedeploy-$myregion.s3.amazonaws.com/latest/install
+                    chmod +x ./install
+                    sudo ./install auto
+                    yum install -y python-pip
+                    pip install ansible
                     tee /etc/profile.d/devops.sh << EOF
-                        #!/bin/bash
-                        export ENV_NAME=Jenkins_Master
-                        export SLAVE_NAME=${SlaveIPAddress}
+                    #!/bin/bash
+                    export ENV_NAME=Jenkins_Master
+                    export SLAVE_NAME=${SlaveIPAddress}
 
     ElasticLoadBalancer:
         Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
@@ -430,6 +440,12 @@ Resources:
                     ToPort: '8080'
                     SourceSecurityGroupId:
                         Ref: LoadBalancerSecurityGroup
+                - 
+                    IpProtocol: tcp
+                    FromPort: '0'
+                    ToPort: '65535'
+                    SourceSecurityGroupId:
+                        Ref: SlaveSecurityGroup
                 - 
                     IpProtocol: tcp
                     FromPort: '22'
@@ -528,6 +544,27 @@ Resources:
             SecurityGroupIds: 
                 - !Ref SlaveSecurityGroup
             SubnetId: !Ref ClientSubnet1
+            UserData:
+                'Fn::Base64':
+                 !Sub |
+                    #!/bin/bash -vx
+                    exec > >(tee /var/log/userdata.log) 2>&1
+                    IP=$(/usr/bin/ec2-metadata | grep public-ipv4 | head -n 1 | awk '{print $2}' | sed 's/\./-/g')
+                    INSTANCE_TAG=mcrm-ci-slave-client
+                    JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
+                    hostname $JENKINS_HOSTNAME
+                    sudo yum update
+                    sudo yum install ruby
+                    sudo yum install wget
+                    myregion=$(/usr/bin/ec2-metadata | grep placement | head -n 1 | awk '{print $2}' | rev | cut -c 2- | rev)
+                    wget https://aws-codedeploy-$myregion.s3.amazonaws.com/latest/install
+                    chmod +x ./install
+                    sudo ./install auto
+                    yum install -y python-pip
+                    pip install ansible
+                    tee /etc/profile.d/devops.sh << EOF
+                    #!/bin/bash
+                    export ENV_NAME=Jenkins_Master
 
             Tags:
                 -
@@ -556,4 +593,3 @@ Outputs:
                         'Fn::GetAtt':
                             - ElasticLoadBalancer
                             - DNSName
-
