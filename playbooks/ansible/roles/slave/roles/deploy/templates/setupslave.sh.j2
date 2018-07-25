@@ -1,5 +1,5 @@
 #!/bin/bash
-until $(curl --output /dev/null --silent --head --fail -u admin:admin http://${Reach_Name}); do
+until $(curl --output /dev/null --silent --head --fail  http://${Reach_Name}); do
     printf '.'
     sleep 5
 done
