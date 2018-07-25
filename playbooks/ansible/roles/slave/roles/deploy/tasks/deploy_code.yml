@@ -30,6 +30,7 @@
 
 - name : sense jenkins master live or not
   shell : "source /etc/profile.d/devops.sh"
+  ignore_errors: yes 
 
 #- name : run docker jenkins slave
 #  shell : "docker run -d jenkins/jnlp-slave -url http://${Reach_Name}:80  $secret_key slave-node"
