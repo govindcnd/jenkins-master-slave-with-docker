@@ -24,6 +24,9 @@
 
 - name: populate config file for slave script
   template : src=setupslave.sh.j2 dest=/home/ec2-user/setupslave.sh
+  owner: root
+  group: root
+  mode: '0755'
 
 - name : sense jenkins master live or not
   shell : "bash -x /home/ec2-user/setupslave.sh"
