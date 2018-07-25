@@ -31,5 +31,8 @@
 - name : sense jenkins master live or not
   shell : "source /etc/profile.d/devops.sh"
 
-- name : run docker jenkins slave
-  shell : "docker run -d jenkins/jnlp-slave -url http://${Reach_Name}:80  $secret_key slave-node"
+#- name : run docker jenkins slave
+#  shell : "docker run -d jenkins/jnlp-slave -url http://${Reach_Name}:80  $secret_key slave-node"
+#
+- name : runslave 
+  shell : "docker run -d --name slave-node --restart=unless-stopped  -v /home/jenkins:/home/jenkins  -v /var/run/docker.sock:/var/run/docker.sock -e JENKINS_URL=http://${Reach_Name}  foxylion/jenkins-slave"
