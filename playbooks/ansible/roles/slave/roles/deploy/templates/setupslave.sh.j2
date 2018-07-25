@@ -3,5 +3,5 @@ until $(curl --output /dev/null --silent --head --fail  http://${Reach_Name}); d
     printf '.'
     sleep 5
 done
-secret=$(curl -s -u admin:admin http://${Reach_Name}/computer/slave-node/ | grep "secret" | sed -e 's#.*secret\(\)#\1#' | awk '{print$1}')
-echo "export secret_key=$secret" >> /etc/profile.d/devops.sh
+#secret=$(curl -s -u admin:admin http://${Reach_Name}/computer/slave-node/ | grep "secret" | sed -e 's#.*secret\(\)#\1#' | awk '{print$1}')
+#echo "export secret_key=$secret" >> /etc/profile.d/devops.sh
