@@ -7,7 +7,10 @@ Parameters:
         ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
     ClientSubnet1:
         Type: 'AWS::EC2::Subnet::Id'
-        Description: Subnet Id for Jenkins Slave 
+        Description: Subnet Id for Jenkins Master and slave  
+    ELBSubnets:
+        Type:  List<AWS::EC2::Subnet::Id>
+        Description: Subnet Ids  for Jenkins ELB
     KeyName:
         Type: 'AWS::EC2::KeyPair::KeyName'
         Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
@@ -318,94 +321,45 @@ Mappings:
             HVMG2: ami-05868579
 
 Resources:
-    ciMasterGroupv2:
-        Type: AWS::EC2::Instance
+    ElasticLoadBalancer:
+        Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
         Properties:
-            InstanceType:
-                Ref: InstanceType
-            ImageId: 
-                'Fn::FindInMap':
-                    - AWSRegionArch2AMI
-                    - 
-                        Ref: 'AWS::Region'
-                    - 
-                        'Fn::FindInMap':
-                            - AWSInstanceType2Arch
-                            - 
-                                Ref: InstanceType
-                            - Arch
-            KeyName: 
-                Ref: KeyName
-            SecurityGroupIds: 
-                - !Ref JenkinsSecurityGroup
-            SubnetId: !Ref ClientSubnet1
-            UserData:
-                'Fn::Base64':
-                 !Sub |
-                    #!/bin/bash -vx
-                    exec > >(tee /var/log/userdata.log) 2>&1
-                    IP=$(/usr/bin/ec2-metadata | grep public-ipv4 | head -n 1 | awk '{print $2}' | sed 's/\./-/g')
-                    INSTANCE_TAG=mcrm-ci-master-client
-                    JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
-                    hostname $JENKINS_HOSTNAME
-                    sudo yum update
-                    sudo yum install -y ruby
-                    sudo yum install -y git 
-                    sudo yum install -y wget
-                    myregion=$(/usr/bin/ec2-metadata | grep placement | head -n 1 | awk '{print $2}' | rev | cut -c 2- | rev)
-                    wget https://aws-codedeploy-$myregion.s3.amazonaws.com/latest/install
-                    chmod +x ./install
-                    sudo ./install auto
-                    yum install -y python-pip
-                    pip install ansible
-                    mkdir /var/jenkins_home
-                    cd /home/ec2-user/
-                    git clone https://github.com/govindcnd/jenkins-master-slave-with-docker.git
-                    tee /etc/profile.d/devops.sh << EOF
-                    #!/bin/bash
-                    export ENV_NAME=Jenkins_Master
-                    export SLAVE_NAME=${SlaveIPAddress}
-                    EOF
-                    /usr/bin/ansible-playbook /home/ec2-user/jenkins-master-slave-with-docker//playbooks/ansible/roles/master/site.yml -i /home/ec2-user/jenkins-master-slave-with-docker//playbooks/ansible/roles/master/hosts --connection=local
+            CrossZone: 'true'
+            SecurityGroups:
+                - 
+                    Ref: LoadBalancerSecurityGroup
+            Subnets: !Ref ELBSubnets
+            ConnectionDrainingPolicy:
+                Enabled: true
+                Timeout: 10
+            Listeners:
+                - 
+                    LoadBalancerPort: '80'
+                    InstancePort: '80'
+                    Protocol: HTTP
 
-
-            Tags:
-                -
-                 Key: Name
-                 Value: jenkinsMaster
-    MasterIPAddress:
-        Type: AWS::EC2::EIP
-    
-    IPAssoc:
-        Type: AWS::EC2::EIPAssociation
+            HealthCheck:
+                Target: 'TCP:80'
+                HealthyThreshold: '2'
+                UnhealthyThreshold: '9'
+                Interval: '30'
+                Timeout: '25'
+            Instances:
+                - Ref: ciMGroupv2
+    LoadBalancerSecurityGroup:
+        Type: 'AWS::EC2::SecurityGroup'
         Properties:
-            InstanceId:
-                 Ref: ciMasterGroupv2
-            EIP:
-                Ref: MasterIPAddress
-      
-    
-    JenkinsSecurityGroup:
-        Type: AWS::EC2::SecurityGroup
-        Properties:
-            GroupDescription: Web server
-            GroupName: web     
-            VpcId: 
+            GroupDescription: Enable HTTP access on port 80
+            VpcId:
                 Ref: VpcId
             SecurityGroupIngress:
-            -
-             IpProtocol: tcp
-             FromPort: 80
-             ToPort: 80
-             CidrIp: 0.0.0.0/0
-            -
-             IpProtocol: tcp
-             FromPort: 22
-             ToPort: 22
-             CidrIp: 
-                 Ref: SSHLocation
+                - 
+                    IpProtocol: tcp
+                    FromPort: '80'
+                    ToPort: '80'
+                    CidrIp: 0.0.0.0/0
 
-    ciSlaveGroupv2:
+    ciSGroupv2:
         Type: AWS::EC2::Instance
         Properties:
             InstanceType:
@@ -424,7 +378,7 @@ Resources:
             KeyName: 
                 Ref: KeyName
             SecurityGroupIds: 
-                - !Ref JenkinsSecurityGroup
+                - !Ref JenkinsSSecurityGroup
             SubnetId: !Ref ClientSubnet1
             UserData:
                 'Fn::Base64':
@@ -445,16 +399,131 @@ Resources:
                     sudo ./install auto
                     yum install -y python-pip
                     pip install ansible
-                    cd /home/ec2-user/ && git clone https://github.com/govindcnd/jenkins-master-slave-with-docker.git
+                    mkdir /var/jenkins_home
+                    cd /home/ec2-user/
+                    git clone https://github.com/govindcnd/jenkins-master-slave-with-docker.git
                     tee /etc/profile.d/devops.sh << EOF
                     #!/bin/bash
                     export ENV_NAME=Jenkins_Slave
-                    export MASTER_NAME=${MasterIPAddress}
+                    export Reach_Name=${SlaveIPAddress}
+                    EOF
+                    /usr/bin/ansible-playbook /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/slave/site.yml -i /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/slave/hosts --connection=local
 
             Tags:
                 -
                  Key: Name
                  Value: jenkinsSlave
+    JenkinsMIPaddress:
+        Type: AWS::EC2::EIP
+    
+    IPAssoc:
+        Type: AWS::EC2::EIPAssociation
+        Properties:
+            InstanceId:
+                 Ref: ciSGroupv2
+            EIP:
+                Ref: JenkinsMIPaddress
+      
+    
+    
+
+
+    JenkinsMSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: jenkins master server
+            GroupName: jenkins master group     
+            VpcId: 
+                Ref: VpcId
+            SecurityGroupIngress:
+            -
+             IpProtocol: tcp
+             FromPort: 80
+             ToPort: 80
+             CidrIp: 0.0.0.0/0
+            -
+             IpProtocol: tcp
+             FromPort: 50000
+             ToPort: 50000
+             CidrIp: 0.0.0.0/0
+            -
+             IpProtocol: tcp
+             FromPort: 22
+             ToPort: 22
+             CidrIp: 
+                 Ref: SSHLocation
+
+    JenkinsSSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: jenkins slave server
+            GroupName: jenkins S group     
+            VpcId: 
+                Ref: VpcId
+            SecurityGroupIngress:
+            -
+             IpProtocol: tcp
+             FromPort: 80
+             ToPort: 80
+             CidrIp: 0.0.0.0/0
+            -
+             IpProtocol: tcp
+             FromPort: 22
+             ToPort: 22
+             CidrIp: 
+                 Ref: SSHLocation
+    ciMGroupv2:
+        Type: AWS::EC2::Instance
+        Properties:
+            InstanceType:
+                Ref: InstanceType
+            ImageId: 
+                'Fn::FindInMap':
+                    - AWSRegionArch2AMI
+                    - 
+                        Ref: 'AWS::Region'
+                    - 
+                        'Fn::FindInMap':
+                            - AWSInstanceType2Arch
+                            - 
+                                Ref: InstanceType
+                            - Arch
+            KeyName: 
+                Ref: KeyName
+            SecurityGroupIds: 
+                - !Ref JenkinsMSecurityGroup
+            SubnetId: !Ref ClientSubnet1
+            UserData:
+                'Fn::Base64':
+                 !Sub |
+                    #!/bin/bash -vx
+                    exec > >(tee /var/log/userdata.log) 2>&1
+                    IP=$(/usr/bin/ec2-metadata | grep public-ipv4 | head -n 1 | awk '{print $2}' | sed 's/\./-/g')
+                    INSTANCE_TAG=mcrm-ci-master-client
+                    JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
+                    hostname $JENKINS_HOSTNAME
+                    sudo yum update
+                    sudo yum install -y ruby
+                    sudo yum install -y git 
+                    sudo yum install -y wget
+                    myregion=$(/usr/bin/ec2-metadata | grep placement | head -n 1 | awk '{print $2}' | rev | cut -c 2- | rev)
+                    wget https://aws-codedeploy-$myregion.s3.amazonaws.com/latest/install
+                    chmod +x ./install
+                    sudo ./install auto
+                    yum install -y python-pip
+                    pip install ansible
+                    cd /home/ec2-user/ && git clone https://github.com/govindcnd/jenkins-master-slave-with-docker.git
+                    tee /etc/profile.d/devops.sh << EOF
+                    #!/bin/bash
+                    export ENV_NAME=Jenkins_Master
+                    export Reach_Name=${JenkinsMIPaddress}
+                    EOF
+                    /usr/bin/ansible-playbook /home/ec2-user/jenkins-master-slave-with-docker//playbooks/ansible/roles/master/site.yml -i /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/master/hosts --connection=local
+
+            Tags:
+                -
+                 Key: Name
+                 Value: jenkinsMaster
     SlaveIPAddress:
         Type: AWS::EC2::EIP
     
@@ -462,17 +531,19 @@ Resources:
         Type: AWS::EC2::EIPAssociation
         Properties:
             InstanceId:
-                 Ref: ciSlaveGroupv2
+                 Ref: ciMGroupv2
             EIP:
                 Ref: SlaveIPAddress
 
 Outputs:
     URL:
-        Description: URL of the cisite
+        Description: URL of the  cisite
         Value:
             'Fn::Join':
                 - ''
                 - 
                     - 'http://'
                     - 
-                        'Fn::GetAtt': [ ciMasterGroupv2, PublicIp ]
+                        'Fn::GetAtt':
+                            - ElasticLoadBalancer
+                            - DNSName
