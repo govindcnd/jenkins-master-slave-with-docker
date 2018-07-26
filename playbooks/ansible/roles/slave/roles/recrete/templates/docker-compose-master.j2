@@ -1,0 +1,19 @@
+---
+version: "2.1"
+services:
+  master:
+    image: govindcnd/jenkinsmastersalve
+    ports:
+    - "9090:9090"
+    - "40000:40000"
+    volumes:
+    - jenkins-master:/var/jenkins_home
+    - ./config.xml:/var/jenkins_home/users/admin/config.xml
+    - ./slave-node/config.xml:/var/jenkins_home/nodes/slave-node/config.xml
+    - ./setup.sh:/usr/local/bin/setup.sh
+    environment:
+    - JAVA_OPTS=-Xmx1024m
+#    command: 
+#    - setup.sh
+volumes:
+  jenkins-master:
