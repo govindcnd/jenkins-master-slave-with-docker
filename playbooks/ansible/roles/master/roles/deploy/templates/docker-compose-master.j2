@@ -10,6 +10,7 @@ services:
     - jenkins-master:/var/jenkins_home
     - ./config.xml:/var/jenkins_home/users/admin/config.xml
     - ./slave-node/config.xml:/var/jenkins_home/nodes/slave-node/config.xml
+    - ./:/app
     - ./setup.sh:/usr/local/bin/setup.sh
     environment:
     - JAVA_OPTS=-Xmx1024m

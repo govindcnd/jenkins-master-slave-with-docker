@@ -3,3 +3,7 @@ rm -rf /var/jenkins_home/secrets/initialAdminPassword
 #cp /app/config.xml /var/jenkins_home/users/admin/config.xml
 #mkdir -p /var/jenkins_home/nodes/slave-node
 #cp /app/config-slave.xml /var/jenkins_home/nodes/slave-node/config.xml
+apt-get -y install python-pip python-dev build-essential && pip install pyYAML six tox python-jenkins &&  apt-get -y install --no-install-recommends git && git clone https://github.com/openstack-infra/jenkins-job-builder.git &&  git checkout 1.6.2 && python setup.py install &&  mkdir /var/jenkins_home/jenkins_jobs && pip install jenkins-job-builder
+cp /app/myfirstjob.yml  /var/jenkins_home/jenkins_jobs/
+cp /app/jenkins_jobs.ini /var/jenkins_home/jenkins_jobs/
+cd /var/jenkins_home/jenkins_jobs/ && jenkins-jobs --conf jenkins_jobs.ini update myfirstjob.yml

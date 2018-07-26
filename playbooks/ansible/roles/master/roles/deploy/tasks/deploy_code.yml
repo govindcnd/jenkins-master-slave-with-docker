@@ -19,6 +19,12 @@
 - name: populate config file for jenkins admin user
   template : src=config.xml.j2 dest=/home/ec2-user/config.xml
 
+- name: populate jenkins job builder ini file
+  template: src=jenkins_jobs.ini.j2 dest=/home/ec2-user/jenkins_jobs.ini
+
+- name: populate sample jenkins job for jenkins job buider
+  template: src=myfirstjob.yml.j2 dest=/home/ec2-user/myfirstjob.yml
+
 - name: populate slave fucntions
   file: path=/home/ec2-user/slave-node state=directory
 
