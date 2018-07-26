@@ -31,6 +31,6 @@
 - name : run docker compose for master
   shell : "docker-compose up -d" 
 
-- name : destroy container
-  shell : "docker rm $(docker stop $(docker ps -a -q --filter ancestor=govindcnd/jenkinsmastersalve --format="{{.ID}}"))"
-  ignore_errors: yes 
+#- name : destroy container
+#  shell : "docker rm $(docker stop $(docker ps -a -q --filter ancestor=govindcnd/jenkinsmastersalve --format="{{.ID}}"))"
+#  ignore_errors: yes 
