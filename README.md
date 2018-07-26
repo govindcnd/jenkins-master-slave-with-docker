@@ -2,10 +2,10 @@
 > This repo helps with Cloudformation template to create Jenkins Master slave set up in AWS AP-singapore /EU-Central region along with sample job based on jenkins job builder
 
 **Resources Created** 
--Master Node EC2
--Slave Node EC2
--EIP's for nodes
--ELB and releated AWS resources of EC2 instances
+- Master Node EC2
+- Slave Node EC2
+- EIP's for nodes
+- ELB and releated AWS resources of EC2 instances
 
 **Working Method**
 >The cloudformation template will create AN ELB, ec2 instanes (  master and  slave node) EIP to be associated with EC2 instances. The user data will create the necessary environent for ansible playbook. Ansible play book will pull docker images for master and slave on relative node and will bring up the docker container with jenkins running in it. The stack will be based on latest amazon linux ami.  ELB end point can be accessed to check the jenkins. slave node will bear the docker-slave-name in it. 
