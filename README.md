@@ -23,5 +23,9 @@ Future improvements
 #Porting to terraform 
 #ECS usage for infra
 
-tags
+##NOTES#######
+Tested only in Asia Pacific Singapore and EU-Ireland Region 
+To work with other regions add Amazonlinux AMI to the template. 
+ 
+Tags
 #jenkins #jenkins-master-slave #Master-slave-ci-using-docker #Jenkins-master-slave-with-docker
