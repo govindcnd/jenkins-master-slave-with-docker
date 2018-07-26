@@ -19,9 +19,9 @@ No authentication at this moment ( Ananymous login )
 3-5 minutes of desployment once the stack creation is completed . ( can be eliminated with minimal changes to ami / by switching code deploy)
 
 **Future improvements**
-Use of Autoscaling and code deploy if required
-Porting to terraform 
-ECS usage for infra
+- Use of Autoscaling and code deploy if required
+- Porting to terraform 
+- ECS usage for infra
 
 **NOTES**
 >Tested only in Asia Pacific Singapore and EU-Ireland Region 
