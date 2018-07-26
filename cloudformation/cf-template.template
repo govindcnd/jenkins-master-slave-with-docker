@@ -7,10 +7,10 @@ Parameters:
         ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
     ClientSubnet1:
         Type: 'AWS::EC2::Subnet::Id'
-        Description: Subnet Id for Jenkins Master and slave  
+        Description: Subnet Id for Jenkins Master and slave  This should match the ELB subnet as well 
     ELBSubnets:
         Type:  List<AWS::EC2::Subnet::Id>
-        Description: Subnet Ids  for Jenkins ELB
+        Description: Subnet Ids  for Jenkins ELB ensure to choose the subnet of jenkins clients as well
     KeyName:
         Type: 'AWS::EC2::KeyPair::KeyName'
         Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
@@ -83,7 +83,7 @@ Parameters:
             - cg1.4xlarge
         ConstraintDescription: must be a valid EC2 instance type.
     InstanceCount:
-        Description: Number of EC2 instances to launch
+        Description: Number of EC2 instances for master and slave that is 1f 1 is given it create 1 master and 1 slave 
         Type: Number
         Default: '1'
 Mappings:
@@ -376,7 +376,7 @@ Resources:
                                 Ref: InstanceType
                             - Arch
             KeyName: 
-                Ref: KeyName
+                Ref: KeyName 
             SecurityGroupIds: 
                 - !Ref JenkinsSSecurityGroup
             SubnetId: !Ref ClientSubnet1
@@ -389,6 +389,12 @@ Resources:
                     INSTANCE_TAG=mcrm-ci-slave-client
                     JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
                     hostname $JENKINS_HOSTNAME
+                    date
+                    tee /etc/profile.d/devops.sh << EOF
+                    #!/bin/bash
+                    export ENV_NAME=Jenkins_Slave
+                    export Reach_Name=${SlaveIPAddress}
+                    EOF
                     sudo yum update
                     sudo yum install -y ruby
                     sudo yum install -y git 
@@ -402,19 +408,17 @@ Resources:
                     mkdir /var/jenkins_home
                     cd /home/ec2-user/
                     git clone https://github.com/govindcnd/jenkins-master-slave-with-docker.git
-                    tee /etc/profile.d/devops.sh << EOF
-                    #!/bin/bash
-                    export ENV_NAME=Jenkins_Slave
-                    export Reach_Name=${SlaveIPAddress}
-                    EOF
-                    /usr/bin/ansible-playbook /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/slave/site.yml -i /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/slave/hosts --connection=local
+                    date
+                    /usr/bin/ansible-playbook /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/slave/site.yml -i /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/slave/hosts --connection=local -vvvv
 
             Tags:
                 -
                  Key: Name
                  Value: jenkinsSlave
+        DependsOn: ciMGroupv2
     JenkinsMIPaddress:
         Type: AWS::EC2::EIP
+
     
     IPAssoc:
         Type: AWS::EC2::EIPAssociation
@@ -490,6 +494,7 @@ Resources:
                             - Arch
             KeyName: 
                 Ref: KeyName
+
             SecurityGroupIds: 
                 - !Ref JenkinsMSecurityGroup
             SubnetId: !Ref ClientSubnet1
@@ -502,6 +507,7 @@ Resources:
                     INSTANCE_TAG=mcrm-ci-master-client
                     JENKINS_HOSTNAME=$INSTANCE_TAG-$IP
                     hostname $JENKINS_HOSTNAME
+                    date
                     sudo yum update
                     sudo yum install -y ruby
                     sudo yum install -y git 
@@ -518,6 +524,7 @@ Resources:
                     export ENV_NAME=Jenkins_Master
                     export Reach_Name=${JenkinsMIPaddress}
                     EOF
+                    date
                     /usr/bin/ansible-playbook /home/ec2-user/jenkins-master-slave-with-docker//playbooks/ansible/roles/master/site.yml -i /home/ec2-user/jenkins-master-slave-with-docker/playbooks/ansible/roles/master/hosts --connection=local
 
             Tags:
