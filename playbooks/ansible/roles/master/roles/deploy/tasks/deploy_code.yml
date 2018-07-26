@@ -36,3 +36,8 @@
 
 - name : run docker compose for master
   shell : "docker-compose up -d" 
+
+- name : wait for master to be up
+  shell: sleep 60
+- name : set up job builder
+  shell : "docker exec jenkinsmaster bash 'setup.sh'"
