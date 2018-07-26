@@ -1,6 +1,7 @@
 # jenkins-master-slave-with-docker
->**Resources Created** 
-Master Node EC2+
+> This repo helps with Cloudformation template to create Jenkins Master slave set up in AWS AP-singapore /EU-Central region along with sample job based on jenkins job builder
+**Resources Created** 
+>Master Node EC2+
 Slave Node EC2+
 EIP's for nodes+
 ELB and releated AWS resources of EC2 instances
